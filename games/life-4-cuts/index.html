@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Life 4 Cuts by JoonHee</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    @font-face {
+      font-family: 'HakgyoansimNadeuriTTF-B';
+      src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/2408-5@1.0/HakgyoansimNadeuriTTF-B.woff2') format('woff2');
+      font-weight: 700;
+      font-style: normal;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'HakgyoansimNadeuriTTF-B', sans-serif;
+      margin: 0;
+      background: linear-gradient(120deg, #ff9a9e, #fad0c4);
+      min-height: 100vh;
+      padding: 20px;
+      overflow-x: hidden;
+    }
+
+    .wrapper {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 40px;
+      background: #fff;
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+      max-width: 1200px;
+      margin: 0 auto;
+      justify-content: center;
+    }
+
+    .left-panel, .right-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1 1 360px;
+      min-width: 300px;
+    }
+
+    video {
+      width: 100%;
+      max-width: 400px;
+      aspect-ratio: 3 / 4;
+      border-radius: 10px;
+      background: #000;
+      transform: scaleX(-1); 
+    }
+
+    canvas {
+      width: 100%;
+      max-width: 400px;
+      background: #eee;
+      border-radius: 10px;
+    }
+
+    .color-picker {
+      margin: 15px 0;
+      text-align: center;
+    }
+
+    .color-option {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: inline-block;
+      margin: 5px;
+      cursor: pointer;
+      border: 2px solid #ccc;
+    }
+
+    .color-option.selected {
+      border: 3px solid #000;
+    }
+
+    .controls {
+      margin-top: 10px;
+    }
+
+    button {
+      font-family: inherit;
+      font-size: 1rem;
+      padding: 10px 20px;
+      margin: 5px;
+      background-color: #ff79c6;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #ff47b2;
+    }
+
+    p {
+      font-size: 0.9rem;
+      margin: 0.5em 0;
+      text-align: center;
+    }
+  </style>
+  <link rel="stylesheet" href="../../shared.css" />
+</head>
+<body class="mygame-soft">
+  <nav class="mygame-topnav">
+    <a class="mygame-home" href="../../">← my game</a>
+    <span class="mygame-date">Created Apr 1, 2025</span>
+  </nav>
+
+  <header class="life-header mygame-card">
+    <h1>JoonHee's Life 4 Cuts</h1>
+    <p>카메라 권한 허용 필수!!</p>
+  </header>
+
+  <div class="wrapper">
+    <div class="left-panel">
+      <video id="video" autoplay playsinline></video>
+
+      <div class="color-picker" id="colors">
+        <p>Choose a frame color before taking photos:</p>
+        <span class="color-option" style="background:#FFADAD" data-color="#FFADAD"></span>
+        <span class="color-option" style="background:#FFD6A5" data-color="#FFD6A5"></span>
+        <span class="color-option" style="background:#CAFFBF" data-color="#CAFFBF"></span>
+        <span class="color-option" style="background:#9BF6FF" data-color="#9BF6FF"></span>
+        <span class="color-option" style="background:#A0C4FF" data-color="#A0C4FF"></span>
+        <span class="color-option" style="background:#BDB2FF" data-color="#BDB2FF"></span>
+      </div>
+
+      <div class="controls">
+        <button onclick="takePhoto()">Take Photo</button>
+        <button onclick="downloadPhoto()">Download</button>
+      </div>
+    </div>
+
+    <div class="right-panel">
+      <canvas id="canvas" width="360"></canvas>
+    </div>
+  </div>
+
+  <script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const colorOptions = document.querySelectorAll(".color-option");
+
+    const titleText = "Life 4 Cuts by JoonHee";
+    let selectedColor = "#FFADAD";
+    let photoIndex = 0;
+    const maxPhotos = 4;
+
+    let frameWidth = canvas.width;
+    let frameHeight = 0;
+    let currentDate = "";
+
+    function getCurrentDate() {
+      const d = new Date();
+      return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
+    }
+
+    colorOptions.forEach(opt => {
+      opt.addEventListener("click", () => {
+        colorOptions.forEach(o => o.classList.remove("selected"));
+        opt.classList.add("selected");
+        selectedColor = opt.dataset.color;
+        if (frameHeight > 0) drawFrame();
+      });
+    });
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+        video.srcObject = stream;
+
+        video.onloadedmetadata = () => {
+          const aspectRatio = video.videoHeight / video.videoWidth;
+          frameHeight = frameWidth * aspectRatio;
+          canvas.height = frameHeight * maxPhotos + 120;
+          currentDate = getCurrentDate();
+          drawFrame();
+        };
+      } catch (err) {
+        alert("Camera access denied.");
+      }
+    }
+
+    function drawFrame() {
+      ctx.fillStyle = selectedColor;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.fillStyle = "#ffffff";
+      for (let i = 0; i < maxPhotos; i++) {
+        ctx.fillRect(10, 60 + i * frameHeight, frameWidth - 20, frameHeight - 10);
+      }
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 18px HakgyoansimNadeuriTTF-B";
+      ctx.textAlign = "center";
+
+      ctx.fillText(titleText, frameWidth / 2, 40);
+      ctx.fillText(currentDate, frameWidth / 2, canvas.height - 30);
+    }
+
+    function takePhoto() {
+      if (photoIndex >= maxPhotos) {
+        alert("All 4 photos taken.");
+        return;
+      }
+
+      const dx = 10;
+      const dy = 60 + photoIndex * frameHeight;
+      const dw = frameWidth - 20;
+      const dh = frameHeight - 10;
+
+      ctx.save();
+      ctx.translate(dx + dw, 0);   
+      ctx.scale(-1, 1);           
+      ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, 0, dy, dw, dh);
+      ctx.restore();
+
+      photoIndex++;
+    }
+
+    function downloadPhoto() {
+      if (photoIndex < maxPhotos) {
+        alert("Please complete all 4 photos before downloading.");
+        return;
+      }
+
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = `${titleText} (${currentDate}).png`;
+      link.click();
+    }
+
+    window.addEventListener("load", () => {
+      startCamera();
+    });
+  </script>
+</body>
+</html>
