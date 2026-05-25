@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>JoonHee's Life 4 Cuts</title>
+  <title>Life 4 Cuts by JoonHee</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     @font-face {
@@ -56,12 +56,10 @@
     }
 
     canvas {
-      width: auto;
-      max-width: min(400px, 100%);
-      max-height: calc(100vh - 190px);
+      width: 100%;
+      max-width: 400px;
       background: #eee;
       border-radius: 10px;
-      object-fit: contain;
     }
 
     .color-picker {
@@ -108,32 +106,6 @@
       margin: 0.5em 0;
       text-align: center;
     }
-
-    .caption-panel, .retake-controls {
-      margin-top: 10px;
-      text-align: center;
-    }
-
-    .caption-panel input {
-      font-family: 'HakgyoansimNadeuriTTF-B', sans-serif;
-      width: min(360px, 100%);
-      padding: 10px 12px;
-      border: 2px solid #ff79c6;
-      border-radius: 10px;
-      font-size: 1rem;
-      text-align: center;
-      outline: none;
-    }
-
-    .retake-controls button {
-      font-size: 0.85rem;
-      padding: 8px 12px;
-    }
-
-    .shoot-status {
-      min-height: 1.2em;
-      color: #444;
-    }
   </style>
   <link rel="stylesheet" href="../../shared.css" />
 </head>
@@ -166,22 +138,30 @@
         <button onclick="takePhoto()">Take Photo</button>
         <button onclick="downloadPhoto()">Download</button>
       </div>
-
-      <div class="caption-panel" id="captionPanel" hidden>
-        <p>네 컷 촬영 후 날짜 아래에 넣을 문구를 입력하세요.</p>
-        <input id="captionInput" type="text" maxlength="32" placeholder="예: 오늘도 행복한 하루" />
-      </div>
-      <p class="shoot-status" id="shootStatus"></p>
     </div>
 
     <div class="right-panel">
       <canvas id="canvas" width="360"></canvas>
-      <div class="retake-controls" id="retakeControls" hidden>
+
+      <div id="captionArea">
+        <p>네 컷 촬영 후 날짜 아래에 넣을 문구를 입력하세요.</p>
+        <input
+          id="captionInput"
+          type="text"
+          maxlength="40"
+          size="32"
+          placeholder="예: 오늘도 행복한 하루"
+          style="font-family: inherit;"
+        />
+      </div>
+
+      <div class="controls" id="retakeControls">
         <button onclick="prepareRetake(0)">1컷 재촬영</button>
         <button onclick="prepareRetake(1)">2컷 재촬영</button>
         <button onclick="prepareRetake(2)">3컷 재촬영</button>
         <button onclick="prepareRetake(3)">4컷 재촬영</button>
       </div>
+      <p id="retakeStatus" style="display: none;"></p>
     </div>
   </div>
 
@@ -190,29 +170,38 @@
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
     const colorOptions = document.querySelectorAll(".color-option");
-    const captionPanel = document.getElementById("captionPanel");
     const captionInput = document.getElementById("captionInput");
-    const retakeControls = document.getElementById("retakeControls");
-    const shootStatus = document.getElementById("shootStatus");
+    const retakeStatus = document.getElementById("retakeStatus");
 
     const titleText = "JoonHee's Life 4 Cuts";
-    const maxPhotos = 4;
-    const topMargin = 60;
-    const sidePadding = 10;
-    const bottomMargin = 155;
-
     let selectedColor = "#FFADAD";
-    let photoIndex = 0;
-    let retakeIndex = null;
+    const maxPhotos = 4;
+    const photos = new Array(maxPhotos).fill(null);
+    let retakeTarget = null;
+
     let frameWidth = canvas.width;
     let frameHeight = 0;
     let currentDate = "";
-    let captionText = "";
-    const photos = new Array(maxPhotos).fill(null);
 
     function getCurrentDate() {
       const d = new Date();
       return `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
+    }
+
+    function getNextEmptyPhotoIndex() {
+      return photos.findIndex(photo => photo === null);
+    }
+
+    function drawCenteredFitText(text, x, y, maxWidth, fontSize) {
+      if (!text) return;
+
+      let size = fontSize;
+      ctx.font = `bold ${size}px HakgyoansimNadeuriTTF-B`;
+      while (ctx.measureText(text).width > maxWidth && size > 11) {
+        size -= 1;
+        ctx.font = `bold ${size}px HakgyoansimNadeuriTTF-B`;
+      }
+      ctx.fillText(text, x, y);
     }
 
     colorOptions.forEach(opt => {
@@ -225,8 +214,7 @@
     });
 
     captionInput.addEventListener("input", () => {
-      captionText = captionInput.value.trim();
-      drawFrame();
+      if (frameHeight > 0) drawFrame();
     });
 
     async function startCamera() {
@@ -237,7 +225,7 @@
         video.onloadedmetadata = () => {
           const aspectRatio = video.videoHeight / video.videoWidth;
           frameHeight = frameWidth * aspectRatio;
-          canvas.height = frameHeight * maxPhotos + bottomMargin;
+          canvas.height = frameHeight * maxPhotos + 120;
           currentDate = getCurrentDate();
           drawFrame();
         };
@@ -246,106 +234,83 @@
       }
     }
 
-    function fitText(text, maxWidth, baseSize, minSize) {
-      let fontSize = baseSize;
-      do {
-        ctx.font = `bold ${fontSize}px HakgyoansimNadeuriTTF-B`;
-        if (ctx.measureText(text).width <= maxWidth || fontSize <= minSize) break;
-        fontSize -= 1;
-      } while (fontSize > minSize);
-    }
-
     function drawFrame() {
-      if (!frameHeight) return;
-
       ctx.fillStyle = selectedColor;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       ctx.fillStyle = "#ffffff";
       for (let i = 0; i < maxPhotos; i++) {
-        const x = sidePadding;
-        const y = topMargin + i * frameHeight;
-        const w = frameWidth - sidePadding * 2;
-        const h = frameHeight - 10;
-        ctx.fillRect(x, y, w, h);
-        if (photos[i]) ctx.drawImage(photos[i], x, y, w, h);
+        const dx = 10;
+        const dy = 60 + i * frameHeight;
+        const dw = frameWidth - 20;
+        const dh = frameHeight - 10;
+
+        ctx.fillRect(dx, dy, dw, dh);
+        if (photos[i]) {
+          ctx.drawImage(photos[i], dx, dy, dw, dh);
+        }
       }
 
       ctx.fillStyle = "#ffffff";
       ctx.textAlign = "center";
-      fitText(titleText, frameWidth - 24, 18, 13);
-      ctx.fillText(titleText, frameWidth / 2, 40);
 
-      ctx.font = "bold 18px HakgyoansimNadeuriTTF-B";
-      ctx.fillText(currentDate, frameWidth / 2, canvas.height - 55);
-
-      if (captionText) {
-        fitText(captionText, frameWidth - 28, 17, 11);
-        ctx.fillText(captionText, frameWidth / 2, canvas.height - 28);
-      }
-    }
-
-    function captureCurrentVideoFrame(slotIndex) {
-      if (!frameHeight || !video.videoWidth || !video.videoHeight) return;
-
-      const dw = frameWidth - sidePadding * 2;
-      const dh = frameHeight - 10;
-      const photoCanvas = document.createElement("canvas");
-      photoCanvas.width = dw;
-      photoCanvas.height = dh;
-      const photoCtx = photoCanvas.getContext("2d");
-
-      photoCtx.save();
-      photoCtx.translate(dw, 0);
-      photoCtx.scale(-1, 1);
-      photoCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, 0, 0, dw, dh);
-      photoCtx.restore();
-
-      photos[slotIndex] = photoCanvas;
-      drawFrame();
-    }
-
-    function updateCompleteControls() {
-      const completed = photos.every(Boolean);
-      captionPanel.hidden = !completed;
-      retakeControls.hidden = !completed;
-      if (completed && retakeIndex === null) {
-        shootStatus.textContent = "네 컷 촬영 완료! 문구를 입력하거나 원하는 컷을 재촬영할 수 있습니다.";
-      }
+      drawCenteredFitText(titleText, frameWidth / 2, 40, frameWidth - 30, 18);
+      drawCenteredFitText(currentDate, frameWidth / 2, canvas.height - 52, frameWidth - 30, 18);
+      drawCenteredFitText(captionInput.value, frameWidth / 2, canvas.height - 27, frameWidth - 30, 16);
     }
 
     function takePhoto() {
-      if (retakeIndex !== null) {
-        captureCurrentVideoFrame(retakeIndex);
-        shootStatus.textContent = `${retakeIndex + 1}컷 재촬영 완료!`;
-        retakeIndex = null;
-        updateCompleteControls();
+      if (!video.videoWidth || !video.videoHeight || frameHeight <= 0) {
+        alert("Camera is not ready yet.");
         return;
       }
 
-      if (photoIndex >= maxPhotos) {
+      const targetIndex = retakeTarget !== null ? retakeTarget : getNextEmptyPhotoIndex();
+      if (targetIndex < 0) {
         alert("All 4 photos taken.");
         return;
       }
 
-      captureCurrentVideoFrame(photoIndex);
-      photoIndex++;
-      updateCompleteControls();
+      const dw = frameWidth - 20;
+      const dh = frameHeight - 10;
+      const photoCanvas = document.createElement("canvas");
+      const photoCtx = photoCanvas.getContext("2d");
+
+      photoCanvas.width = dw;
+      photoCanvas.height = dh;
+      photoCtx.translate(dw, 0);
+      photoCtx.scale(-1, 1);
+      photoCtx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight, 0, 0, dw, dh);
+
+      photos[targetIndex] = photoCanvas;
+      drawFrame();
+
+      if (retakeTarget !== null) {
+        retakeStatus.textContent = `${targetIndex + 1}컷이 다시 촬영되었습니다.`;
+        retakeStatus.style.display = "block";
+        retakeTarget = null;
+      }
     }
 
     function prepareRetake(index) {
-      if (!photos.every(Boolean)) return;
-      retakeIndex = index;
-      shootStatus.textContent = `${index + 1}컷을 다시 찍을 준비가 되었습니다. Take Photo를 누르면 해당 칸만 교체됩니다.`;
+      if (index < 0 || index >= maxPhotos) return;
+
+      photos[index] = null;
+      retakeTarget = index;
+      drawFrame();
+
+      retakeStatus.textContent = `${index + 1}컷을 다시 찍을 준비가 되었습니다. Take Photo를 누르면 해당 칸만 교체됩니다.`;
+      retakeStatus.style.display = "block";
     }
 
     function downloadPhoto() {
-      if (!photos.every(Boolean)) {
+      if (photos.some(photo => photo === null)) {
         alert("Please complete all 4 photos before downloading.");
         return;
       }
 
       drawFrame();
+
       const link = document.createElement("a");
       link.href = canvas.toDataURL("image/png");
       link.download = `${titleText} (${currentDate}).png`;
@@ -353,9 +318,12 @@
     }
 
     window.addEventListener("load", () => {
-      colorOptions[0].classList.add("selected");
       startCamera();
-      if (document.fonts) document.fonts.ready.then(drawFrame);
+      if (document.fonts) {
+        document.fonts.ready.then(() => {
+          if (frameHeight > 0) drawFrame();
+        });
+      }
     });
   </script>
 </body>
