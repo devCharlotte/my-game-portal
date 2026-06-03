@@ -101,9 +101,7 @@ function showOnly(section) {
 }
 
 function setDateLabel() {
-  const today = new Date();
-  const formatter = new Intl.DateTimeFormat('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-  els.todayLabel.textContent = formatter.format(today);
+  els.todayLabel.textContent = 'Created Jun 3, 2026';
 }
 
 function renderSetupCandidates() {
